@@ -35,3 +35,20 @@ def test_broadcast_removes_dead_replica():
     manager.broadcast(entry)
     assert sock_a not in manager._replica
     sock_a.close()
+
+def test_update_ack_sets_last_acked_seq():
+    manager=ReplicaManager()
+    sock_a,sock_b=socket.socketpair()
+    manager.add_replica(sock_a)
+    manager.update_ack(sock_a,5)
+    assert manager._replica[sock_a]["last_acked_seq"]==5
+    sock_a.close()
+    sock_b.close()
+
+def test_update_ack_ignores_unknown_connection():
+    manager=ReplicaManager()
+    sock_a,sock_b=socket.socketpair()
+    manager.update_ack(sock_a,5)
+    assert manager._replica=={}
+    sock_a.close()
+    sock_b.close()

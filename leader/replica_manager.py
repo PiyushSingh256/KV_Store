@@ -28,3 +28,7 @@ class ReplicaManager:
                     failed_replica.append(conn)
         for conn in failed_replica:
             self.remove_replica(conn)
+    def update_ack(self,conn,seq):
+        with self._lock:
+            if conn in self._replica:
+                self._replica[conn]["last_acked_seq"]=seq
