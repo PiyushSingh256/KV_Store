@@ -2,6 +2,7 @@ import socket
 import threading
 from common.protocol import decode,encode
 from common.store import Store
+from common.log import Replication
 from leader.replica_manager import ReplicaManager
 
 class Server:
@@ -10,6 +11,7 @@ class Server:
         self.replica_manager=ReplicaManager()
         self.host=host
         self.port=port
+        self.log=Replication()
         self.store=Store()
     def start(self):
         client_thread=threading.Thread(
@@ -111,6 +113,18 @@ class Server:
                 message["key"],
                 message["value"]
             )
+            seq=self.log.append(
+                "SET",
+                message["key"],
+                message["value"]
+            )
+            entry={
+                "seq":seq,
+                "command_type":"SET",
+                "key":message["key"],
+                "value":message["value"]
+            }
+            self.replica_manager.broadcast(entry)
             return {"status":"OK"}
         elif command_type=="GET":
             try:
@@ -127,6 +141,18 @@ class Server:
         elif command_type=="DELETE":
             try:
                 self.store.delete(message["key"])
+                seq=self.log.append(
+                    "DELETE",
+                    message["key"],
+                    None
+                )
+                entry={
+                    "seq":seq,
+                    "command_type":"DELETE",
+                    "key":message["key"],
+                    "value":None
+                }
+                self.replica_manager.broadcast(entry)
                 return {"status":"OK"}
             except KeyError:
                 return {
