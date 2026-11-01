@@ -7,7 +7,7 @@ from leader.server import Server
 
 @pytest.fixture(scope="module")
 def running_server():
-    server=Server(host="127.0.0.1",port=6381)
+    server=Server(host="127.0.0.1",port=6381,replica_port=6382)
     thread=threading.Thread(
         target=server.start,
         daemon=True
