@@ -1,10 +1,13 @@
 import socket
-from common.protocol import encode,decode
+from common.protocol import encode,decode,IdleTimeout
 from common.store import Store
+from common.config import CONNECT_TIMEOUT,REPLICA_IO_TIMEOUT
 
 class ReplicaClient:
-    def __init__(self,leader_host,leader_port):
+    def __init__(self,leader_host,leader_port,connect_timeout=CONNECT_TIMEOUT,io_timeout=REPLICA_IO_TIMEOUT):
         self.leader_host=leader_host
+        self.connect_timeout=connect_timeout
+        self.io_timeout=io_timeout
         self.leader_port=leader_port
         self.store=Store()
     def connect_and_run(self):
@@ -13,9 +16,11 @@ class ReplicaClient:
             socket.SOCK_STREAM
         )
         try:
+            conn.settimeout(self.connect_timeout)
             conn.connect(
                 (self.leader_host,self.leader_port)
             )
+            conn.settimeout(self.io_timeout)
             handshake={
                 "type": "HANDSHAKE",
                 "last_seq":0
@@ -24,6 +29,8 @@ class ReplicaClient:
             while True:
                 try:
                     message=decode(conn)
+                except IdleTimeout:
+                    continue
                 except ConnectionError:
                     break
                 if message["type"]!="REPLICATE":

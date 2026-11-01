@@ -1,4 +1,5 @@
 import threading
+import socket
 from common.protocol import encode
 
 class ReplicaManager:
@@ -28,7 +29,14 @@ class ReplicaManager:
                     failed_replica.append(conn)
         for conn in failed_replica:
             self.remove_replica(conn)
+            self._drop(conn)
     def update_ack(self,conn,seq):
         with self._lock:
             if conn in self._replica:
                 self._replica[conn]["last_acked_seq"]=seq
+    def _drop(self,conn):
+        try:
+            conn.shutdown(socket.SHUT_RDWR)
+        except OSError:
+            pass
+        conn.close()
