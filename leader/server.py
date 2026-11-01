@@ -1,15 +1,19 @@
 import socket
 import threading
-from common.protocol import decode,encode
+from common.protocol import decode,encode,IdleTimeout
+from common.config import CLIENT_IDLE_TIMEOUT,REPLICA_IO_TIMEOUT
 from common.store import Store
 from common.log import Replication
 from leader.replica_manager import ReplicaManager
 
 class Server:
-    def __init__(self,host="0.0.0.0",port=6380,replica_port=6381):
+    def __init__(self,host="0.0.0.0",port=6380,replica_port=6381,client_idle_timeout=CLIENT_IDLE_TIMEOUT,replica_io_timeout=REPLICA_IO_TIMEOUT):
         self.replica_port=replica_port
         self.replica_manager=ReplicaManager()
         self.host=host
+        self.client_idle_timeout=client_idle_timeout
+        self.replica_io_timeout=replica_io_timeout
+        self.replica_port=replica_port
         self.port=port
         self.log=Replication()
         self.store=Store()
@@ -77,31 +81,43 @@ class Server:
             thread.start()
     
     def handle_client(self,conn):
+        conn.settimeout(self.client_idle_timeout)
         try:
             while True:
                 try:
                     message=decode(conn)
-                except ConnectionError:
+                except IdleTimeout:
+                    break
+                except (ConnectionError,OSError):
                     break
                 response=self.handle_message(message)
-                conn.sendall(encode(response))
+                try:
+                    conn.sendall(encode(response))
+                except OSError:
+                    break
         finally:
             conn.close()
 
     def handle_replica(self,conn):
+        conn.settimeout(self.replica_io_timeout)
         try:
-            message=decode(conn)
+            try:
+                decode(conn)
+            except (IdleTimeout,ConnectionError,OSError):
+                    return
             self.replica_manager.add_replica(conn)
             while True:
                 try:
                     message=decode(conn)
-                except ConnectionError:
+                except IdleTimeout:
+                    continue
+                except (ConnectionError,OSError):
                     break
                 if message["type"]=="ACK":
                     self.replica_manager.update_ack(
                         conn,message["seq"]
                     )
-        finally:
+        finally:    
             self.replica_manager.remove_replica(conn)
             conn.close()
 
